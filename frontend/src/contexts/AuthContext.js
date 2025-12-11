@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+axios.defaults.baseURL = process.env.REACT_APP_API_URL;
+
 
 const AuthContext = createContext();
 
