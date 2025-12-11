@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SER – prithivMLmods</title>
+        <link rel="stylesheet" href="/static/css/styles.css" />
+    </head>
+    <body>
+        <div class="app">
+            <header><h1>Speech Emotion Recognition (prithivMLmods)</h1></header>
+            <main>
+                <section class="card">
+                    <h2>Live Recording</h2>
+                    <div class="controls">
+                        <button id="recordBtn">● Record</button>
+                        <button id="stopBtn" disabled>■ Stop</button>
+                        <span id="status">Ready</span>
+                    </div>
+                    <p class="note">Result will appear after stopping.</p>
+                </section>
+
+                <section class="card">
+                    <h2>Upload Audio File</h2>
+                    <input type="file" id="fileInput" accept="audio/*" />
+                    <button id="uploadBtn">Upload & Analyze</button>
+                </section>
+
+                <section class="card">
+                    <h2>Emotion Predictions</h2>
+                    <div id="predictions">
+                        <p class="muted">(no result yet)</p>
+                    </div>
+                </section>
+            </main>
+            <footer>
+                <small
+                    >Model: prithivMLmods/Speech-Emotion-Classification</small
+                >
+            </footer>
+        </div>
+
+        <script src="/static/js/recorder.js"></script>
+        <script>
+            const recordBtn = document.getElementById("recordBtn");
+            const stopBtn = document.getElementById("stopBtn");
+            const statusEl = document.getElementById("status");
+            const fileInput = document.getElementById("fileInput");
+            const uploadBtn = document.getElementById("uploadBtn");
+            const predictionsEl = document.getElementById("predictions");
+            let recorder = null;
+
+            function showPredictions(preds) {
+                if (!preds || preds.length === 0) {
+                    predictionsEl.innerHTML =
+                        '<p class="muted">(no prediction)</p>';
+                    return;
+                }
+                const maxScore = preds[0].score || 1.0;
+                let html = '<div class="pred-list">';
+                preds.forEach((p) => {
+                    const pct = Math.round((p.score / maxScore) * 100);
+                    html += `<div class="pred-item">
+      <div class="pred-label">${p.label} <span class="score">(${(p.score * 100).toFixed(1)}%)</span></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
+    </div>`;
+                });
+                html += "</div>";
+                predictionsEl.innerHTML = html;
+            }
+
+            recordBtn.addEventListener("click", async () => {
+                recorder = await startRecording();
+                recordBtn.disabled = true;
+                stopBtn.disabled = false;
+                statusEl.textContent = "Recording...";
+            });
+            stopBtn.addEventListener("click", async () => {
+                if (!recorder) return;
+                statusEl.textContent = "Processing...";
+                const wavBlob = await stopRecording(recorder);
+                recordBtn.disabled = false;
+                stopBtn.disabled = true;
+                statusEl.textContent = "Uploading...";
+                const form = new FormData();
+                form.append("audio", wavBlob, "recording.wav");
+                try {
+                    const res = await fetch("/analyze", {
+                        method: "POST",
+                        body: form,
+                    });
+                    const data = await res.json();
+                    if (data.predictions) showPredictions(data.predictions);
+                    else
+                        predictionsEl.innerHTML = `<pre class="error">${data.error || "Error"}</pre>`;
+                } catch (err) {
+                    predictionsEl.innerHTML = `<pre class="error">Network error: ${err.message}</pre>`;
+                }
+                statusEl.textContent = "Ready";
+            });
+            uploadBtn.addEventListener("click", async () => {
+                if (!fileInput.files.length)
+                    return alert("Select an audio file first.");
+                const file = fileInput.files[0];
+                predictionsEl.innerHTML =
+                    '<p class="muted">Uploading and analyzing...</p>';
+                const form = new FormData();
+                form.append("audio", file, file.name);
+                try {
+                    const res = await fetch("/analyze", {
+                        method: "POST",
+                        body: form,
+                    });
+                    const data = await res.json();
+                    if (data.predictions) showPredictions(data.predictions);
+                    else
+                        predictionsEl.innerHTML = `<pre class="error">${data.error || "Error"}</pre>`;
+                } catch (err) {
+                    predictionsEl.innerHTML = `<pre class="error">Network error: ${err.message}</pre>`;
+                }
+            });
+        </script>
+    </body>
+</html>
